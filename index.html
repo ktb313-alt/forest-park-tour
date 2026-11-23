@@ -7,19 +7,22 @@
 <title>Forest Park Trail Tour</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
 /* Layout: full-bleed 360° scene. A start card over it, then only a small corner bar; all navigation lives on signs inside the scene. Dark by choice. */
 :root {
-  --void: #07090c;
-  --card: rgba(12, 16, 21, 0.9);
-  --line: #2a323d;
-  --text: #e9edf2;
-  --muted: #9aa6b4;
-  --signal: #5fd4c4;
-  --pin: #f0a35e;
-  --font-ui: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* Lehigh University palette (UCPA approved colors) */
+  --void: #1c0f04;                  /* deepest Lehigh brown, behind the scene */
+  --card: rgba(80, 45, 14, 0.94);   /* Lehigh Brown #502d0e */
+  --line: #83541e;                  /* Lehigh Brown 80 */
+  --text: #f6f4f2;                  /* Lehigh Brown 02 */
+  --muted: #dec8b2;                 /* Lehigh Brown 20 */
+  --signal: #ffe41e;                /* Lehigh Gold */
+  --pin: #fdeca1;                   /* Gold 60 */
+  --ink: #502d0e;                   /* text on gold */
+  --font-display: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: dark;
 }
 html, body { height: 100%; margin: 0; }
@@ -29,8 +32,8 @@ body { background: var(--void); color: var(--text); font: 14px/1.5 var(--font-ui
 #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .intro { position: fixed; inset: 0; display: grid; place-items: center; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; background: rgba(7, 9, 12, 0.45); }
 .intro-card { width: min(520px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; display: grid; gap: 14px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
-.eyebrow { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pin); margin: 0; }
-.intro h1 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.15; text-wrap: balance; }
+.eyebrow { font-family: var(--font-data); font-weight: 600; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pin); margin: 0; }
+.intro h1 { font-family: var(--font-display); margin: 0; font-size: 26px; font-weight: 600; line-height: 1.15; text-wrap: balance; }
 .intro p { margin: 0; color: var(--muted); max-width: 60ch; }
 .facts { display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--font-data); font-size: 12px; color: var(--muted); }
 .facts b { color: var(--text); font-weight: 500; }
@@ -38,7 +41,7 @@ body { background: var(--void); color: var(--text); font: 14px/1.5 var(--font-ui
 button { font: 500 14px var(--font-ui); color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
 button:hover { border-color: var(--muted); }
 button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-button.primary { background: var(--signal); border-color: var(--signal); color: #04201c; font-weight: 600; }
+button.primary { background: var(--signal); border-color: var(--signal); color: var(--ink); font-weight: 600; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 .status { font-family: var(--font-data); font-size: 12px; color: var(--muted); min-height: 1.5em; }
 .corner { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: calc(12px + env(safe-area-inset-right, 0px)); display: flex; gap: 8px; }
@@ -55,7 +58,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     <p class="eyebrow">180° trail tour · self-guided</p>
     <h1>Forest Park Trail Tour</h1>
     <p>Walk the trail stop by stop. At each stop, look around the trail ahead, read the sign in front of you, then choose to walk on, go back, or jump to any stop on the map.</p>
-    <div class="facts"><span><b>9</b> stops</span><span><b>4 min 29 s</b> of walking</span><span>Footage: GoPro 360°</span></div>
+    <div class="facts"><span><b>9</b> stops</span></div>
     <div class="actions">
       <button class="primary" id="enterVR" disabled>Checking for headset…</button>
       <button id="startFlat">Start on this screen</button>
@@ -114,7 +117,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000);
+  scene.background = new THREE.Color(0x1c0f04);
   const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 200);
   camera.position.set(0, 1.6, 0);
   scene.add(camera);
@@ -139,7 +142,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         #ifdef USE_MAP
           vec4 texelColor = texture2D( map, frontUv( vUv ) );
           texelColor = mapTexelToLinear( texelColor );
-          texelColor.rgb = mix( vec3( 0.0022, 0.0028, 0.0036 ), texelColor.rgb, frontMask( vUv ) );
+          texelColor.rgb = mix( vec3( 0.0110, 0.0048, 0.0012 ), texelColor.rgb, frontMask( vUv ) );
           diffuseColor *= texelColor;
         #endif`);
   };
@@ -217,8 +220,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   }
 
   // ---------------- Signs (canvas panels in the scene) ----------------
-  const C = { bg: 'rgba(10,14,18,0.9)', line: '#2a323d', text: '#e9edf2', muted: '#9aa6b4', signal: '#5fd4c4', pin: '#f0a35e', ink: '#04201c', btn: 'rgba(255,255,255,0.06)', hover: 'rgba(95,212,196,0.18)' };
-  const F = { ui: '"Sora", system-ui, sans-serif', data: '"IBM Plex Mono", ui-monospace, monospace' };
+  // Lehigh palette: Lehigh Brown signs, off-white text, Lehigh Gold for the main action and highlights.
+  const C = { bg: 'rgba(80,45,14,0.94)', line: '#83541e', text: '#f6f4f2', muted: '#dec8b2', signal: '#ffe41e', pin: '#ffe41e', ink: '#502d0e', btn: 'rgba(246,244,242,0.06)', hover: 'rgba(255,228,30,0.16)', track: '#9f7549', done: '#fdeca1', disabled: '#9f7549' };
+  const F = { display: '"Sora", system-ui, sans-serif', ui: '"Inter", system-ui, sans-serif', data: '"Inter", system-ui, sans-serif' };
   function makePanel(wpx, hpx, wm) {
     const cv = document.createElement('canvas'); cv.width = wpx; cv.height = hpx;
     const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = maxAniso;
@@ -244,7 +248,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     g.fillStyle = b.disabled ? 'rgba(255,255,255,0.03)' : b.primary ? C.signal : (p.hover === b.id ? C.hover : C.btn); g.fill();
     if (!b.primary) { g.lineWidth = 2; g.strokeStyle = p.hover === b.id && !b.disabled ? C.signal : C.line; g.stroke(); }
     if (b.primary && p.hover === b.id) { g.lineWidth = 5; g.strokeStyle = C.text; g.stroke(); }
-    g.fillStyle = b.disabled ? '#5b6572' : b.primary ? C.ink : C.text;
+    g.fillStyle = b.disabled ? C.disabled : b.primary ? C.ink : C.text;
     g.font = `600 ${b.size || 30}px ${F.ui}`; g.textAlign = 'center'; g.textBaseline = 'middle';
     const label = wrap(g, b.label, b.w - 36, 1)[0] || '';
     g.fillText(label, b.x + b.w / 2, b.y + b.h / 2 + 1);
@@ -256,15 +260,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   stopPanel.draw = p => {
     frame(p); const g = p.g, i = current.stop, s = STOPS[i];
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-    g.fillStyle = C.pin; g.font = `500 26px ${F.data}`; g.fillText(`STOP ${pad2(i + 1)} OF ${pad2(N)}`, 64, 92);
-    g.fillStyle = C.text; g.font = `600 54px ${F.ui}`;
+    g.fillStyle = C.pin; g.font = `700 26px ${F.data}`; g.fillText(`STOP ${pad2(i + 1)} OF ${pad2(N)}`, 64, 92);
+    g.fillStyle = C.text; g.font = `600 54px ${F.display}`;
     const title = wrap(g, s.name, 1072, 2); title.forEach((l, k) => g.fillText(l, 64, 168 + k * 64));
     let y = 168 + title.length * 64 + 18;
     g.fillStyle = C.muted; g.font = `500 32px ${F.ui}`;
     const note = s.note || (i === 0 ? 'Look around the trail ahead. When you’re ready, walk to the first stop.' : 'Take a look around before you move on.');
     wrap(g, note, 1072, 4).forEach((l, k) => g.fillText(l, 64, y + k * 44));
     // progress dots
-    const dy = 520; for (let k = 0; k < N; k++) { g.beginPath(); g.arc(64 + k * 34, dy, k === i ? 11 : 8, 0, Math.PI * 2); g.fillStyle = k < i ? C.signal : k === i ? C.pin : C.line; g.fill(); }
+    const dy = 520; for (let k = 0; k < N; k++) { g.beginPath(); g.arc(64 + k * 34, dy, k === i ? 11 : 8, 0, Math.PI * 2); g.fillStyle = k < i ? C.done : k === i ? C.signal : C.track; g.fill(); }
     const last = i === N - 1;
     button(p, { id: 'back', label: '← Back', x: 64, y: 580, w: 220, h: 92, disabled: i === 0 });
     button(p, { id: last ? 'restart' : 'next', label: last ? 'Start over' : `Walk to ${STOPS[i + 1].name} →`, x: 304, y: 580, w: 612, h: 92, primary: true, size: 30 });
@@ -277,8 +281,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     frame(p); const g = p.g, i = current.walk, dur = WALKS[i] ? WALKS[i].duration : 1;
     const t = Math.min(dur, video.currentTime || 0);
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-    g.fillStyle = C.muted; g.font = `500 24px ${F.data}`; g.fillText(loadingWalk ? 'LOADING THE TRAIL…' : `WALKING · ${fmt(dur - t)} TO GO`, 48, 64);
-    g.fillStyle = C.text; g.font = `600 36px ${F.ui}`; g.fillText(wrap(g, `To ${STOPS[i + 1].name}`, 600, 1)[0], 48, 114);
+    g.fillStyle = C.muted; g.font = `700 24px ${F.data}`; g.fillText(loadingWalk ? 'LOADING THE TRAIL…' : `WALKING · ${fmt(dur - t)} TO GO`, 48, 64);
+    g.fillStyle = C.text; g.font = `600 36px ${F.display}`; g.fillText(wrap(g, `To ${STOPS[i + 1].name}`, 600, 1)[0], 48, 114);
     roundRect(g, 48, 150, 600, 14, 7); g.fillStyle = C.line; g.fill();
     roundRect(g, 48, 150, Math.max(14, 600 * t / dur), 14, 7); g.fillStyle = C.signal; g.fill();
     if (video.muted) button(p, { id: 'sound', label: 'Sound on', x: 690, y: 50, w: 200, h: 130, size: 28 });
@@ -293,13 +297,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   mapPanel.draw = p => {
     frame(p); const g = p.g;
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-    g.fillStyle = C.pin; g.font = `500 24px ${F.data}`; g.fillText('TRAIL MAP', 56, 76);
-    g.fillStyle = C.text; g.font = `600 40px ${F.ui}`; g.fillText('Jump to a stop', 56, 128);
+    g.fillStyle = C.pin; g.font = `700 24px ${F.data}`; g.fillText('TRAIL MAP', 56, 76);
+    g.fillStyle = C.text; g.font = `600 40px ${F.display}`; g.fillText('Jump to a stop', 56, 128);
     STOPS.forEach((s, i) => {
       const y = 162 + i * 66, here = i === current.stop && current.mode !== 'walk';
       const b = { id: 'goto:' + i, x: 48, y, w: 700, h: 58 }; p.buttons.push(b);
       roundRect(g, b.x, b.y, b.w, b.h, 14);
-      if (p.hover === b.id) { g.fillStyle = C.hover; g.fill(); } else if (here) { g.fillStyle = 'rgba(240,163,94,0.12)'; g.fill(); }
+      if (p.hover === b.id) { g.fillStyle = C.hover; g.fill(); } else if (here) { g.fillStyle = 'rgba(255,228,30,0.10)'; g.fill(); }
       g.fillStyle = here ? C.pin : C.muted; g.font = `500 24px ${F.data}`; g.fillText(pad2(i + 1), 70, y + 38);
       g.fillStyle = C.text; g.font = `500 28px ${F.ui}`; g.fillText(wrap(g, s.name, 560, 1)[0], 124, y + 39);
       if (here) { g.fillStyle = C.pin; g.font = `500 20px ${F.data}`; g.textAlign = 'right'; g.fillText('YOU', 732, y + 37); g.textAlign = 'left'; }
@@ -311,7 +315,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
       const here = i === current.stop && current.mode !== 'walk';
       const b = { id: 'goto:' + i, x: q.x - 30, y: q.y - 30, w: 60, h: 60 }; p.buttons.push(b);
       g.beginPath(); g.arc(q.x, q.y, here ? 22 : 16, 0, Math.PI * 2);
-      g.fillStyle = p.hover === b.id ? C.signal : here ? C.pin : '#3a4552'; g.fill();
+      g.fillStyle = p.hover === b.id ? C.signal : here ? C.pin : C.track; g.fill();
       g.fillStyle = here || p.hover === b.id ? C.ink : C.text; g.font = `600 18px ${F.data}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(i + 1), q.x, q.y + 1);
       g.textAlign = 'left'; g.textBaseline = 'alphabetic';
     });
@@ -444,7 +448,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
   const controllers = [0, 1].map(i => {
     const c = renderer.xr.getController(i);
-    const line = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color: 0x5fd4c4, transparent: true, opacity: 0.8 }));
+    const line = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color: 0xffe41e, transparent: true, opacity: 0.8 }));
     line.scale.z = 4; line.visible = false; c.add(line); c.userData.line = line;
     c.addEventListener('connected', e => { line.visible = e.data && e.data.targetRayMode === 'tracked-pointer'; });
     c.addEventListener('disconnected', () => { line.visible = false; });
@@ -486,7 +490,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   // Show the trailhead behind the start card straight away.
   loadPano(0).then(t => { showTexture(t); fadeTo(0.35, 400); setStatus(useMSE ? 'Ready.' : 'Ready. Walking clips load fully before each walk on this browser.'); })
              .catch(() => setStatus('Couldn’t load the trailhead view. Check your connection and reload.'));
-  if (document.fonts) document.fonts.ready.then(() => panels.forEach(p => { if (p.mesh.visible) redraw(p); }));
+  if (document.fonts) Promise.all(['600 54px Sora', '500 32px Inter', '600 30px Inter', '700 26px Inter'].map(f => document.fonts.load(f)))
+    .catch(() => {}).then(() => panels.forEach(p => { if (p.mesh.visible) redraw(p); }));
 
   // ---------------- Loop ----------------
   addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
