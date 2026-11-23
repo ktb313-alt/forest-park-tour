@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A self-guided 180° VR tour of the Forest Park trail.">
+<title>Forest Park Trail Tour</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed 360° scene. A start card over it, then only a small corner bar; all navigation lives on signs inside the scene. Dark by choice. */
+:root {
+  --void: #07090c;
+  --card: rgba(12, 16, 21, 0.9);
+  --line: #2a323d;
+  --text: #e9edf2;
+  --muted: #9aa6b4;
+  --signal: #5fd4c4;
+  --pin: #f0a35e;
+  --font-ui: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+body { background: var(--void); color: var(--text); font: 14px/1.5 var(--font-ui); overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.intro { position: fixed; inset: 0; display: grid; place-items: center; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; background: rgba(7, 9, 12, 0.45); }
+.intro-card { width: min(520px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; display: grid; gap: 14px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.eyebrow { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pin); margin: 0; }
+.intro h1 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.15; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 60ch; }
+.facts { display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--font-data); font-size: 12px; color: var(--muted); }
+.facts b { color: var(--text); font-weight: 500; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+button { font: 500 14px var(--font-ui); color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+button.primary { background: var(--signal); border-color: var(--signal); color: #04201c; font-weight: 600; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.status { font-family: var(--font-data); font-size: 12px; color: var(--muted); min-height: 1.5em; }
+.corner { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: calc(12px + env(safe-area-inset-right, 0px)); display: flex; gap: 8px; }
+.corner button { background: var(--card); padding: 8px 12px; font-size: 13px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); font-family: var(--font-data); font-size: 12px; color: var(--muted); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div class="intro" id="intro">
+  <div class="intro-card">
+    <p class="eyebrow">180° trail tour · self-guided</p>
+    <h1>Forest Park Trail Tour</h1>
+    <p>Walk the trail stop by stop. At each stop, look around the trail ahead, read the sign in front of you, then choose to walk on, go back, or jump to any stop on the map.</p>
+    <div class="facts"><span><b>9</b> stops</span><span><b>4 min 29 s</b> of walking</span><span>Footage: GoPro 360°</span></div>
+    <div class="actions">
+      <button class="primary" id="enterVR" disabled>Checking for headset…</button>
+      <button id="startFlat">Start on this screen</button>
+    </div>
+    <div class="status" id="status">Loading the trailhead…</div>
+  </div>
+</div>
+
+<div class="corner" id="corner" hidden>
+  <button id="vrCorner" hidden>Enter VR</button>
+  <button id="mapCorner">Map</button>
+</div>
+<div class="hint" id="hint" hidden>Drag to look around · click the signs to move</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  // ---------------- Tour data (from the Trail Stop Planner) ----------------
+  const STOPS = [
+    { t: 0, name: 'Forest Park Trailhead', note: '' },
+    { t: 21.58, name: 'Trailhead', note: 'This is the trailhead' },
+    { t: 71.7, name: 'First blaze', note: 'The trail is marked and accessible for a short hike' },
+    { t: 96.07, name: 'Beginning to wind', note: 'Take a moment to look around.' },
+    { t: 155.08, name: 'Heading into the experimental arboretum', note: 'There is an experimental arboretum nestled in this trail. It was a discovered by X in Y' },
+    { t: 180.58, name: 'Climbing', note: '' },
+    { t: 201.59, name: 'First identification mark of a tree', note: 'Stop here to check the identification tag on this tree.' },
+    { t: 228.9, name: 'Take in the view before heading onward', note: 'The Mist trail continues up and follows the ridge line back to the beginning' },
+    { t: 268.57, name: 'End of the walk', note: 'Thanks!' },
+  ].map((s, i) => ({ ...s, pano: `front/stop${i}.jpg` }));
+  const WALKS = [
+    // 2048×2048 front-half footage at 14 Mbps, in 9.5 MB pieces that play back in order.
+    { duration: 21.588, parts: ['walk/w0_00.mp4', 'walk/w0_01.mp4', 'walk/w0_02.mp4', 'walk/w0_03.mp4', 'walk/w0_04.mp4'] },
+    { duration: 50.184, parts: ['walk/w1_00.mp4', 'walk/w1_01.mp4', 'walk/w1_02.mp4', 'walk/w1_03.mp4', 'walk/w1_04.mp4', 'walk/w1_05.mp4', 'walk/w1_06.mp4', 'walk/w1_07.mp4', 'walk/w1_08.mp4', 'walk/w1_09.mp4'] },
+    { duration: 24.391, parts: ['walk/w2_00.mp4', 'walk/w2_01.mp4', 'walk/w2_02.mp4', 'walk/w2_03.mp4', 'walk/w2_04.mp4'] },
+    { duration: 59.059, parts: ['walk/w3_00.mp4', 'walk/w3_01.mp4', 'walk/w3_02.mp4', 'walk/w3_03.mp4', 'walk/w3_04.mp4', 'walk/w3_05.mp4', 'walk/w3_06.mp4', 'walk/w3_07.mp4', 'walk/w3_08.mp4', 'walk/w3_09.mp4', 'walk/w3_10.mp4', 'walk/w3_11.mp4'] },
+    { duration: 25.526, parts: ['walk/w4_00.mp4', 'walk/w4_01.mp4', 'walk/w4_02.mp4', 'walk/w4_03.mp4', 'walk/w4_04.mp4'] },
+    { duration: 21.021, parts: ['walk/w5_00.mp4', 'walk/w5_01.mp4', 'walk/w5_02.mp4', 'walk/w5_03.mp4', 'walk/w5_04.mp4'] },
+    { duration: 27.327, parts: ['walk/w6_00.mp4', 'walk/w6_01.mp4', 'walk/w6_02.mp4', 'walk/w6_03.mp4', 'walk/w6_04.mp4'] },
+    { duration: 39.674, parts: ['walk/w7_00.mp4', 'walk/w7_01.mp4', 'walk/w7_02.mp4', 'walk/w7_03.mp4', 'walk/w7_04.mp4', 'walk/w7_05.mp4', 'walk/w7_06.mp4', 'walk/w7_07.mp4'] },
+  ];
+  const MIME = 'video/mp4; codecs="avc1.640033, mp4a.40.2"';
+  const N = STOPS.length;
+
+  const $ = id => document.getElementById(id);
+  const pad2 = n => String(n).padStart(2, '0');
+  const fmt = s => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${pad2(s % 60)}`; };
+
+  // ---------------- Renderer / scene ----------------
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.xr.enabled = true;
+  renderer.xr.setReferenceSpaceType('local-floor');
+  $('stage').appendChild(renderer.domElement);
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+  const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 200);
+  camera.position.set(0, 1.6, 0);
+  scene.add(camera);
+
+  // 360° sphere: centre of the equirectangular frame (the trail ahead) faces -Z.
+  const sphereGeo = new THREE.SphereGeometry(50, 96, 48); sphereGeo.scale(-1, 1, 1);
+  const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  // The footage is the front half of the 360° frame only (2048×2048, the trail ahead), since the camera
+  // operator always walks behind the camera. On the full sphere it covers u 0.25 → 0.75; the sides fade
+  // to dark, and the selfie stick at the very bottom is covered with ground mirrored from just above it.
+  sphereMat.onBeforeCompile = shader => {
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', `
+        vec2 frontUv(vec2 uv) {
+          vec2 t = vec2(clamp((uv.x - 0.25) * 2.0, 0.0, 1.0), uv.y);
+          if (t.y < 0.05) t.y = 0.10 - t.y;
+          return t;
+        }
+        float frontMask(vec2 uv) { return 1.0 - smoothstep(0.235, 0.262, abs(uv.x - 0.5)); }
+        void main() {`)
+      .replace('#include <map_fragment>', `
+        #ifdef USE_MAP
+          vec4 texelColor = texture2D( map, frontUv( vUv ) );
+          texelColor = mapTexelToLinear( texelColor );
+          texelColor.rgb = mix( vec3( 0.0022, 0.0028, 0.0036 ), texelColor.rgb, frontMask( vUv ) );
+          diffuseColor *= texelColor;
+        #endif`);
+  };
+  sphereMat.customProgramCacheKey = () => 'tour-180-front-v2';
+  const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+  sphere.rotation.y = -Math.PI / 2; sphere.position.y = 1.6;
+  scene.add(sphere);
+
+  // Fade shell between the sphere and the signs, so signs stay readable during jumps.
+  const fadeMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 1, side: THREE.BackSide, depthWrite: false });
+  const fade = new THREE.Mesh(new THREE.SphereGeometry(6, 32, 16), fadeMat);
+  fade.position.y = 1.6; fade.renderOrder = 1; scene.add(fade);
+  let fadeTarget = 1;
+  const fadeTo = (v, ms = 260) => new Promise(r => { fadeTarget = v; fadeSpeed = 1 / Math.max(1, ms); fadeDone = r; });
+  let fadeSpeed = 1 / 260, fadeDone = null;
+
+  // ---------------- Textures ----------------
+  const loader = new THREE.TextureLoader();
+  const panoCache = new Map();
+  function loadPano(i) {
+    if (panoCache.has(i)) return panoCache.get(i);
+    const p = new Promise((res, rej) => loader.load(STOPS[i].pano, t => { t.encoding = THREE.sRGBEncoding; t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; res(t); }, undefined, rej));
+    panoCache.set(i, p); p.catch(() => panoCache.delete(i)); return p;
+  }
+  const video = document.createElement('video');
+  video.playsInline = true; video.setAttribute('playsinline', ''); video.crossOrigin = 'anonymous'; video.preload = 'auto';
+  const videoTex = new THREE.VideoTexture(video);
+  videoTex.encoding = THREE.sRGBEncoding; videoTex.minFilter = THREE.LinearFilter; videoTex.generateMipmaps = false;
+  function showTexture(t) { sphereMat.map = t; sphereMat.needsUpdate = true; }
+
+  // ---------------- Walking clips: fetched in pieces, streamed in order ----------------
+  const segCache = new Map();
+  function fetchSeg(i) {
+    if (segCache.has(i)) return segCache.get(i);
+    let prev = Promise.resolve();
+    const parts = WALKS[i].parts.map(p => (prev = prev.then(() => fetch(p).then(r => { if (!r.ok) throw new Error('Missing ' + p); return r.arrayBuffer(); }))));
+    parts.forEach(p => p.catch(() => segCache.delete(i)));
+    segCache.set(i, parts);
+    for (const k of segCache.keys()) if (k !== i && k !== current.stop && k !== current.stop + 1 && k !== current.walk) segCache.delete(k);
+    return parts;
+  }
+  const MS = window.ManagedMediaSource || window.MediaSource;
+  const useMSE = !!(MS && MS.isTypeSupported && MS.isTypeSupported(MIME));
+  let objectURL = null;
+  function setSrc(url) { if (objectURL) URL.revokeObjectURL(objectURL); objectURL = url; video.src = url; }
+
+  async function loadSegInto(i, token) {
+    const parts = fetchSeg(i);
+    if (!useMSE) {
+      const bufs = await Promise.all(parts);
+      if (token !== walkToken) return;
+      setSrc(URL.createObjectURL(new Blob(bufs, { type: 'video/mp4' })));
+      return;
+    }
+    const ms = new MS();
+    if (MS === window.ManagedMediaSource) video.disableRemotePlayback = true;
+    setSrc(URL.createObjectURL(ms));
+    await new Promise(r => ms.addEventListener('sourceopen', r, { once: true }));
+    const sb = ms.addSourceBuffer(MIME);
+    const appendOnce = buf => new Promise((res, rej) => {
+      sb.addEventListener('updateend', res, { once: true }); sb.addEventListener('error', rej, { once: true });
+      sb.appendBuffer(buf);
+    });
+    (async () => {
+      try {
+        for (let k = 0; k < parts.length; k++) {
+          const buf = await parts[k];
+          if (token !== walkToken || ms.readyState !== 'open') return;
+          await appendOnce(buf);
+          if (k === 0) { try { ms.duration = WALKS[i].duration; } catch (e) {} }
+        }
+        if (ms.readyState === 'open') ms.endOfStream();
+      } catch (e) { if (token === walkToken) arrive(i + 1, true); }
+    })();
+  }
+
+  // ---------------- Signs (canvas panels in the scene) ----------------
+  const C = { bg: 'rgba(10,14,18,0.9)', line: '#2a323d', text: '#e9edf2', muted: '#9aa6b4', signal: '#5fd4c4', pin: '#f0a35e', ink: '#04201c', btn: 'rgba(255,255,255,0.06)', hover: 'rgba(95,212,196,0.18)' };
+  const F = { ui: '"Sora", system-ui, sans-serif', data: '"IBM Plex Mono", ui-monospace, monospace' };
+  function makePanel(wpx, hpx, wm) {
+    const cv = document.createElement('canvas'); cv.width = wpx; cv.height = hpx;
+    const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = maxAniso;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(wm, wm * hpx / wpx), mat);
+    mesh.renderOrder = 2; mesh.visible = false; scene.add(mesh);
+    const p = { cv, g: cv.getContext('2d'), tex, mesh, buttons: [], hover: null, draw: null };
+    mesh.userData.panel = p;
+    return p;
+  }
+  function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function wrap(g, text, maxW, maxLines) {
+    const words = String(text).split(/\s+/).filter(Boolean), lines = []; let line = '';
+    for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; }
+    if (line) lines.push(line);
+    if (lines.length > maxLines) { lines.length = maxLines; let l = lines[maxLines - 1]; while (g.measureText(l + '…').width > maxW && l.length) l = l.slice(0, -1); lines[maxLines - 1] = l + '…'; }
+    return lines;
+  }
+  function frame(p) { const g = p.g, W = p.cv.width, H = p.cv.height; g.clearRect(0, 0, W, H); roundRect(g, 2, 2, W - 4, H - 4, 28); g.fillStyle = C.bg; g.fill(); g.lineWidth = 2; g.strokeStyle = C.line; g.stroke(); }
+  function button(p, b) {
+    const g = p.g; p.buttons.push(b);
+    roundRect(g, b.x, b.y, b.w, b.h, 18);
+    g.fillStyle = b.disabled ? 'rgba(255,255,255,0.03)' : b.primary ? C.signal : (p.hover === b.id ? C.hover : C.btn); g.fill();
+    if (!b.primary) { g.lineWidth = 2; g.strokeStyle = p.hover === b.id && !b.disabled ? C.signal : C.line; g.stroke(); }
+    if (b.primary && p.hover === b.id) { g.lineWidth = 5; g.strokeStyle = C.text; g.stroke(); }
+    g.fillStyle = b.disabled ? '#5b6572' : b.primary ? C.ink : C.text;
+    g.font = `600 ${b.size || 30}px ${F.ui}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const label = wrap(g, b.label, b.w - 36, 1)[0] || '';
+    g.fillText(label, b.x + b.w / 2, b.y + b.h / 2 + 1);
+  }
+  function redraw(p) { p.buttons = []; p.draw(p); p.tex.needsUpdate = true; }
+
+  // Stop sign
+  const stopPanel = makePanel(1200, 720, 1.5);
+  stopPanel.draw = p => {
+    frame(p); const g = p.g, i = current.stop, s = STOPS[i];
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillStyle = C.pin; g.font = `500 26px ${F.data}`; g.fillText(`STOP ${pad2(i + 1)} OF ${pad2(N)}`, 64, 92);
+    g.fillStyle = C.text; g.font = `600 54px ${F.ui}`;
+    const title = wrap(g, s.name, 1072, 2); title.forEach((l, k) => g.fillText(l, 64, 168 + k * 64));
+    let y = 168 + title.length * 64 + 18;
+    g.fillStyle = C.muted; g.font = `500 32px ${F.ui}`;
+    const note = s.note || (i === 0 ? 'Look around the trail ahead. When you’re ready, walk to the first stop.' : 'Take a look around before you move on.');
+    wrap(g, note, 1072, 4).forEach((l, k) => g.fillText(l, 64, y + k * 44));
+    // progress dots
+    const dy = 520; for (let k = 0; k < N; k++) { g.beginPath(); g.arc(64 + k * 34, dy, k === i ? 11 : 8, 0, Math.PI * 2); g.fillStyle = k < i ? C.signal : k === i ? C.pin : C.line; g.fill(); }
+    const last = i === N - 1;
+    button(p, { id: 'back', label: '← Back', x: 64, y: 580, w: 220, h: 92, disabled: i === 0 });
+    button(p, { id: last ? 'restart' : 'next', label: last ? 'Start over' : `Walk to ${STOPS[i + 1].name} →`, x: 304, y: 580, w: 612, h: 92, primary: true, size: 30 });
+    button(p, { id: 'map', label: 'Map', x: 936, y: 580, w: 200, h: 92 });
+  };
+
+  // Walking strip
+  const walkPanel = makePanel(1200, 230, 1.1);
+  walkPanel.draw = p => {
+    frame(p); const g = p.g, i = current.walk, dur = WALKS[i] ? WALKS[i].duration : 1;
+    const t = Math.min(dur, video.currentTime || 0);
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillStyle = C.muted; g.font = `500 24px ${F.data}`; g.fillText(loadingWalk ? 'LOADING THE TRAIL…' : `WALKING · ${fmt(dur - t)} TO GO`, 48, 64);
+    g.fillStyle = C.text; g.font = `600 36px ${F.ui}`; g.fillText(wrap(g, `To ${STOPS[i + 1].name}`, 600, 1)[0], 48, 114);
+    roundRect(g, 48, 150, 600, 14, 7); g.fillStyle = C.line; g.fill();
+    roundRect(g, 48, 150, Math.max(14, 600 * t / dur), 14, 7); g.fillStyle = C.signal; g.fill();
+    if (video.muted) button(p, { id: 'sound', label: 'Sound on', x: 690, y: 50, w: 200, h: 130, size: 28 });
+    else button(p, { id: 'pause', label: video.paused && !loadingWalk ? 'Resume' : 'Pause', x: 690, y: 50, w: 200, h: 130, size: 28 });
+    button(p, { id: 'skip', label: 'Skip ⇥', x: 910, y: 50, w: 240, h: 130, primary: true, size: 28 });
+  };
+  let lastWalkDraw = 0;
+
+  // Map
+  const mapPanel = makePanel(1400, 860, 1.75);
+  const ROUTE = STOPS.map((s, i) => { const u = i / (N - 1); return { x: 860 + 380 * u + Math.sin(u * 9) * 40, y: 760 - 600 * u + Math.cos(u * 7) * 70 }; });
+  mapPanel.draw = p => {
+    frame(p); const g = p.g;
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillStyle = C.pin; g.font = `500 24px ${F.data}`; g.fillText('TRAIL MAP', 56, 76);
+    g.fillStyle = C.text; g.font = `600 40px ${F.ui}`; g.fillText('Jump to a stop', 56, 128);
+    STOPS.forEach((s, i) => {
+      const y = 162 + i * 66, here = i === current.stop && current.mode !== 'walk';
+      const b = { id: 'goto:' + i, x: 48, y, w: 700, h: 58 }; p.buttons.push(b);
+      roundRect(g, b.x, b.y, b.w, b.h, 14);
+      if (p.hover === b.id) { g.fillStyle = C.hover; g.fill(); } else if (here) { g.fillStyle = 'rgba(240,163,94,0.12)'; g.fill(); }
+      g.fillStyle = here ? C.pin : C.muted; g.font = `500 24px ${F.data}`; g.fillText(pad2(i + 1), 70, y + 38);
+      g.fillStyle = C.text; g.font = `500 28px ${F.ui}`; g.fillText(wrap(g, s.name, 560, 1)[0], 124, y + 39);
+      if (here) { g.fillStyle = C.pin; g.font = `500 20px ${F.data}`; g.textAlign = 'right'; g.fillText('YOU', 732, y + 37); g.textAlign = 'left'; }
+    });
+    // route sketch
+    g.strokeStyle = C.line; g.lineWidth = 10; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath();
+    ROUTE.forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.stroke();
+    ROUTE.forEach((q, i) => {
+      const here = i === current.stop && current.mode !== 'walk';
+      const b = { id: 'goto:' + i, x: q.x - 30, y: q.y - 30, w: 60, h: 60 }; p.buttons.push(b);
+      g.beginPath(); g.arc(q.x, q.y, here ? 22 : 16, 0, Math.PI * 2);
+      g.fillStyle = p.hover === b.id ? C.signal : here ? C.pin : '#3a4552'; g.fill();
+      g.fillStyle = here || p.hover === b.id ? C.ink : C.text; g.font = `600 18px ${F.data}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(i + 1), q.x, q.y + 1);
+      g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    });
+    g.fillStyle = C.muted; g.font = `400 20px ${F.data}`; g.fillText('Route sketch, not to scale', 860, 820);
+    button(p, { id: 'close', label: 'Close', x: 1180, y: 44, w: 172, h: 76, size: 28 });
+  };
+
+  // ---------------- Placement ----------------
+  const tmpV = new THREE.Vector3(), tmpP = new THREE.Vector3();
+  function viewer() {
+    const cam = renderer.xr.isPresenting ? renderer.xr.getCamera(camera) : camera;
+    cam.getWorldPosition(tmpP); cam.getWorldDirection(tmpV); tmpV.y = 0;
+    if (tmpV.lengthSq() < 1e-4) tmpV.set(0, 0, -1); tmpV.normalize();
+    return { p: tmpP.clone(), d: tmpV.clone() };
+  }
+  function place(panel, dist, dy, tilt = 0) {
+    const { p, d } = viewer();
+    panel.mesh.position.set(p.x + d.x * dist, p.y + dy, p.z + d.z * dist);
+    panel.mesh.lookAt(p.x, p.y + dy, p.z);
+    panel.mesh.rotateX(tilt);
+  }
+
+  // ---------------- Tour state ----------------
+  const current = { mode: 'intro', stop: 0, walk: -1 };
+  let walkToken = 0, loadingWalk = false, mapOpen = false, needsPlace = false;
+
+  function showPanels() {
+    stopPanel.mesh.visible = current.mode === 'stop' && !mapOpen;
+    walkPanel.mesh.visible = current.mode === 'walk' && !mapOpen;
+    mapPanel.mesh.visible = mapOpen;
+  }
+  function placeAll() {
+    if (mapOpen) { redraw(mapPanel); place(mapPanel, 2.3, -0.1); }
+    else if (current.mode === 'stop') { redraw(stopPanel); place(stopPanel, 2.0, -0.2); }
+    else if (current.mode === 'walk') { redraw(walkPanel); place(walkPanel, 1.7, -0.75, -0.5); }
+    showPanels();
+  }
+
+  async function arrive(i, seamless) {
+    const tok = ++walkToken; loadingWalk = false;
+    current.mode = 'arriving'; video.pause();
+    if (!seamless) await fadeTo(1, 220);
+    if (tok !== walkToken) return;
+    try { const t = await loadPano(i); if (tok !== walkToken) return; showTexture(t); } catch (e) { setStatus('Couldn’t load this stop’s view. Check your connection and try again.'); }
+    current.mode = 'stop'; current.stop = i; current.walk = -1; mapOpen = false;
+    placeAll(); fadeTo(0, seamless ? 1 : 320);
+    // Get the next stretch and the neighbouring views ready while the viewer looks around.
+    if (i < N - 1) { fetchSeg(i); loadPano(i + 1).catch(() => {}); }
+    if (i > 0) loadPano(i - 1).catch(() => {});
+  }
+
+  async function walk(i) {
+    const token = ++walkToken;
+    current.mode = 'walk'; current.walk = i; mapOpen = false; loadingWalk = true;
+    placeAll();
+    try { await loadSegInto(i, token); } catch (e) { if (token === walkToken) arrive(i + 1, false); return; }
+    if (token !== walkToken) return;
+    const startPlay = async () => {
+      try { await video.play(); }
+      catch (e) {
+        // The browser refused sound without a fresh tap: walk on silently and offer sound on the sign.
+        if (token !== walkToken) return;
+        video.muted = true; try { await video.play(); } catch (e2) {}
+        redraw(walkPanel);
+      }
+    };
+    video.addEventListener('playing', function onP() {
+      video.removeEventListener('playing', onP);
+      if (token !== walkToken) return;
+      loadingWalk = false; showTexture(videoTex); redraw(walkPanel);
+    });
+    startPlay();
+  }
+  // Show "loading" on the walking sign whenever playback stalls for more data.
+  video.addEventListener('waiting', () => { if (current.mode === 'walk') { loadingWalk = true; redraw(walkPanel); } });
+  video.addEventListener('playing', () => { if (current.mode === 'walk' && loadingWalk) { loadingWalk = false; redraw(walkPanel); } });
+  video.addEventListener('ended', () => { if (current.mode === 'walk') arrive(current.walk + 1, true); });
+  video.addEventListener('timeupdate', () => { if (current.mode === 'walk' && WALKS[current.walk] && video.currentTime >= WALKS[current.walk].duration - 0.08) arrive(current.walk + 1, true); });
+
+  function act(id) {
+    if (!id) return;
+    if (id === 'next') walk(current.stop);
+    else if (id === 'back') arrive(Math.max(0, current.stop - 1), false);
+    else if (id === 'restart') arrive(0, false);
+    else if (id === 'map') { mapOpen = true; placeAll(); }
+    else if (id === 'close') { mapOpen = false; placeAll(); }
+    else if (id === 'skip') arrive(current.walk + 1, false);
+    else if (id === 'sound') { video.muted = false; video.play().catch(() => {}); redraw(walkPanel); }
+    else if (id === 'pause') { if (video.paused) video.play().catch(() => {}); else video.pause(); redraw(walkPanel); }
+    else if (id.startsWith('goto:')) arrive(+id.slice(5), false);
+  }
+
+  // ---------------- Pointing: mouse, touch and XR controllers ----------------
+  const ray = new THREE.Raycaster(), mtx = new THREE.Matrix4();
+  const panels = [stopPanel, walkPanel, mapPanel];
+  function hitTest() {
+    const meshes = panels.filter(p => p.mesh.visible).map(p => p.mesh);
+    const h = ray.intersectObjects(meshes, false)[0];
+    if (!h) return null;
+    const p = h.object.userData.panel, x = h.uv.x * p.cv.width, y = (1 - h.uv.y) * p.cv.height;
+    const b = p.buttons.find(b => !b.disabled && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    return { panel: p, id: b ? b.id : null, dist: h.distance };
+  }
+  function setHover(hits) {
+    panels.forEach(p => { const id = (hits.find(h => h && h.panel === p) || {}).id || null; if (p.hover !== id) { p.hover = id; redraw(p); } });
+  }
+
+  // Mouse / touch: drag to look, tap to press.
+  let lon = 0, lat = 0, drag = null;
+  const cv = renderer.domElement;
+  const ndc = e => { const r = cv.getBoundingClientRect(); return new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); };
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, lon, lat, moved: false }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => {
+    if (drag) {
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 6) drag.moved = true;
+      if (drag.moved) { const k = camera.fov / innerHeight; lon = Math.max(-95, Math.min(95, drag.lon - dx * k)); lat = Math.max(-85, Math.min(85, drag.lat + dy * k)); }
+      return;
+    }
+    if (renderer.xr.isPresenting) return;
+    ray.setFromCamera(ndc(e), camera); const h = hitTest(); setHover([h]); cv.style.cursor = h && h.id ? 'pointer' : 'grab';
+  });
+  cv.addEventListener('pointerup', e => {
+    const d = drag; drag = null; if (!d || d.moved) return;
+    ray.setFromCamera(ndc(e), camera); const h = hitTest(); if (h && h.id) act(h.id);
+  });
+  cv.addEventListener('wheel', e => { e.preventDefault(); camera.fov = Math.max(35, Math.min(95, camera.fov + e.deltaY * 0.04)); camera.updateProjectionMatrix(); }, { passive: false });
+
+  // XR controllers and hand/gaze pointers.
+  const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+  const controllers = [0, 1].map(i => {
+    const c = renderer.xr.getController(i);
+    const line = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color: 0x5fd4c4, transparent: true, opacity: 0.8 }));
+    line.scale.z = 4; line.visible = false; c.add(line); c.userData.line = line;
+    c.addEventListener('connected', e => { line.visible = e.data && e.data.targetRayMode === 'tracked-pointer'; });
+    c.addEventListener('disconnected', () => { line.visible = false; });
+    c.addEventListener('select', () => { aimFrom(c); const h = hitTest(); if (h && h.id) act(h.id); });
+    scene.add(c); return c;
+  });
+  function aimFrom(c) { mtx.identity().extractRotation(c.matrixWorld); ray.ray.origin.setFromMatrixPosition(c.matrixWorld); ray.ray.direction.set(0, 0, -1).applyMatrix4(mtx); }
+
+  // ---------------- Start / VR ----------------
+  const setStatus = t => { $('status').textContent = t; };
+  let xrSession = null, vrOK = false;
+  async function startTour() {
+    $('intro').hidden = true; $('corner').hidden = false; $('hint').hidden = renderer.xr.isPresenting;
+    if (current.mode === 'intro') await arrive(0, false);
+  }
+  async function enterVR() {
+    if (xrSession) { xrSession.end(); return; }
+    try {
+      const s = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
+      xrSession = s; await renderer.xr.setSession(s);
+      $('vrCorner').textContent = 'Exit VR'; $('hint').hidden = true;
+      s.addEventListener('end', () => { xrSession = null; $('vrCorner').textContent = 'Enter VR'; $('hint').hidden = false; needsPlace = true; });
+      await startTour(); needsPlace = true;
+    } catch (e) { setStatus('Couldn’t start VR: ' + (e.message || e.name)); }
+  }
+  $('startFlat').onclick = () => startTour();
+  $('enterVR').onclick = enterVR; $('vrCorner').onclick = enterVR;
+  $('mapCorner').onclick = () => { if (current.mode === 'intro') return; mapOpen = !mapOpen; placeAll(); };
+  (async () => {
+    const btn = $('enterVR');
+    if (!('xr' in navigator)) { btn.textContent = 'No headset detected'; return; }
+    try {
+      vrOK = await navigator.xr.isSessionSupported('immersive-vr');
+      if (vrOK) { btn.disabled = false; btn.textContent = 'Enter VR'; $('vrCorner').hidden = false; }
+      else btn.textContent = 'VR not available here';
+    } catch (e) { btn.textContent = 'VR blocked in this view'; }
+  })();
+
+  // Show the trailhead behind the start card straight away.
+  loadPano(0).then(t => { showTexture(t); fadeTo(0.35, 400); setStatus(useMSE ? 'Ready.' : 'Ready. Walking clips load fully before each walk on this browser.'); })
+             .catch(() => setStatus('Couldn’t load the trailhead view. Check your connection and reload.'));
+  if (document.fonts) document.fonts.ready.then(() => panels.forEach(p => { if (p.mesh.visible) redraw(p); }));
+
+  // ---------------- Loop ----------------
+  addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+  let last = performance.now();
+  renderer.setAnimationLoop(now => {
+    const dt = Math.min(100, now - last); last = now;
+    if (!renderer.xr.isPresenting) {
+      const phi = THREE.MathUtils.degToRad(90 - lat), th = THREE.MathUtils.degToRad(lon);
+      camera.lookAt(camera.position.x + Math.sin(phi) * Math.sin(th), camera.position.y + Math.cos(phi), camera.position.z - Math.sin(phi) * Math.cos(th));
+    } else {
+      setHover(controllers.map(c => { aimFrom(c); const h = hitTest(); if (c.userData.line) c.userData.line.scale.z = h ? h.dist : 4; return h; }));
+    }
+    if (needsPlace && current.mode !== 'intro') { needsPlace = false; placeAll(); }
+    if (fadeMat.opacity !== fadeTarget) {
+      const step = dt * fadeSpeed; fadeMat.opacity = fadeMat.opacity < fadeTarget ? Math.min(fadeTarget, fadeMat.opacity + step) : Math.max(fadeTarget, fadeMat.opacity - step);
+      if (fadeMat.opacity === fadeTarget && fadeDone) { const r = fadeDone; fadeDone = null; r(); }
+    } else if (fadeDone) { const r = fadeDone; fadeDone = null; r(); }
+    fade.visible = fadeMat.opacity > 0.001;
+    if (current.mode === 'walk' && walkPanel.mesh.visible && now - lastWalkDraw > 250) { lastWalkDraw = now; redraw(walkPanel); }
+    renderer.render(scene, camera);
+  });
+})();
+</script>
+</body>
+</html>
